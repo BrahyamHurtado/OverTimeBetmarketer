@@ -1,0 +1,21 @@
+{
+  "extends": "@modern-js/tsconfig/base",
+  "compilerOptions": {
+    "declaration": false,
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "jsx": "preserve",
+    "allowJs": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "isolatedModules": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["DOM", "ES2020", "DOM.Iterable"]
+  },
+  "include": ["src", "config"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "horas-extras-backend",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "dev:gateway": "pnpm --filter gateway dev",
+    "dev:auth": "pnpm --filter auth-service dev",
+    "dev:overtime": "pnpm --filter overtime-service dev",
+    "dev:report": "pnpm --filter report-service dev",
+    "infra:up": "docker compose up -d"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

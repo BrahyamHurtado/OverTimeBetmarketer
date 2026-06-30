@@ -1,0 +1,103 @@
+services:
+  # --- Bases de datos (database-per-service) ---
+  db-auth:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: he
+      POSTGRES_PASSWORD: he
+      POSTGRES_DB: auth
+    volumes: [auth_data:/var/lib/postgresql/data]
+    ports: ['5433:5432']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U he -d auth']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  db-overtime:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: he
+      POSTGRES_PASSWORD: he
+      POSTGRES_DB: overtime
+    volumes: [overtime_data:/var/lib/postgresql/data]
+    ports: ['5434:5432']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U he -d overtime']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- Redis: cache (festivos, sesiones) y rate limiting distribuido ---
+  redis:
+    image: redis:7-alpine
+    ports: ['6379:6379']
+
+  # --- Cola para generación asíncrona de PDF / notificaciones por correo ---
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports: ['5672:5672', '15672:15672']
+
+  # --- Microservicios ---
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    environment:
+      AUTH_DATABASE_URL: postgresql://he:he@db-auth:5432/auth
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 4001
+    depends_on:
+      db-auth:
+        condition: service_healthy
+
+  overtime-service:
+    build:
+      context: .
+      dockerfile: services/overtime-service/Dockerfile
+    environment:
+      OVERTIME_DATABASE_URL: postgresql://he:he@db-overtime:5432/overtime
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 4002
+    depends_on:
+      db-overtime:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    deploy:
+      replicas: 1 # subir a 2+ para escala horizontal (servicio sin estado tras el gateway)
+
+  report-service:
+    build:
+      context: .
+      dockerfile: services/report-service/Dockerfile
+    environment:
+      OVERTIME_DATABASE_URL: postgresql://he:he@db-overtime:5432/overtime
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 4003
+    depends_on:
+      db-overtime:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_URL: http://auth-service:4001
+      OVERTIME_URL: http://overtime-service:4002
+      REPORT_URL: http://report-service:4003
+      FRONT_ORIGIN: ${FRONT_ORIGIN}
+      PORT: 4000
+    ports: ['4000:4000']
+    depends_on:
+      - auth-service
+      - overtime-service
+      - report-service
+
+volumes:
+  auth_data:
+  overtime_data:

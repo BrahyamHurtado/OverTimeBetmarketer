@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("OVERTIME_DATABASE_URL")
+}
+
+enum TipoDia {
+  HABIL
+  NO_HABIL
+  DOMINICAL_FESTIVO
+}
+
+enum EstadoPlanilla {
+  BORRADOR
+  ENVIADA
+  APROBADA
+  RECHAZADA
+  PROCESADA
+}
+
+// Planilla mensual de un empleado (cabecera del formato)
+model Planilla {
+  id           String         @id @default(uuid())
+  empleadoId   String // referencia lógica al Usuario (auth-service)
+  supervisorId String?
+  mes          Int
+  anio         Int
+  estado       EstadoPlanilla @default(BORRADOR)
+  observaciones String?
+
+  // Snapshot denormalizado del empleado al momento de guardar.
+  // Las DBs están separadas (database-per-service); duplicar evita
+  // joins cross-service y preserva datos históricos aunque el usuario
+  // luego cambie sus datos en auth-service.
+  empleadoNombre      String?
+  empleadoCedula      String?
+  empleadoCargo       String?
+  empleadoDependencia String?
+  supervisorNombre    String?
+
+  // Trazabilidad / firmas digitales
+  enviadaAt    DateTime?
+  revisadaAt   DateTime?
+  revisadaPor  String?
+  firmaEmpleadoUrl   String?
+  firmaSupervisorUrl String?
+  motivoRechazo String?
+
+  // Control de concurrencia optimista para edición simultánea
+  version      Int            @default(0)
+
+  registros    RegistroHoras[]
+  eventos      EventoPlanilla[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([empleadoId, mes, anio]) // una planilla por empleado/mes/año
+  @@index([estado])
+  @@index([supervisorId, estado])
+}
+
+// Cada fila del formato (un turno en una fecha)
+model RegistroHoras {
+  id                 String   @id @default(uuid())
+  planillaId         String
+  planilla           Planilla @relation(fields: [planillaId], references: [id], onDelete: Cascade)
+  fecha              DateTime @db.Date
+  tipoDia            TipoDia
+  horaInicio         String // 'HH:mm'
+  horaFin            String
+
+  // Calculados por el motor (no los envía el empleado)
+  extraDiurna        Float    @default(0)
+  extraNocturna      Float    @default(0)
+  domFestivaDiurna   Float    @default(0)
+  domFestivaNocturna Float    @default(0)
+  totalHoras         Float    @default(0)
+
+  @@index([planillaId])
+}
+
+// Log inmutable de trazabilidad (auditoría)
+model EventoPlanilla {
+  id         String   @id @default(uuid())
+  planillaId String
+  planilla   Planilla @relation(fields: [planillaId], references: [id], onDelete: Cascade)
+  tipo       String // CREADA | ENVIADA | APROBADA | RECHAZADA | EDITADA | PROCESADA
+  actorId    String
+  detalle    String?
+  createdAt  DateTime @default(now())
+
+  @@index([planillaId])
+}
