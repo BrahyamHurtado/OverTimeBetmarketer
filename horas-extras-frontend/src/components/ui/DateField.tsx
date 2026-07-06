@@ -13,8 +13,8 @@ interface DateFieldProps {
   ariaLabel?: string;
 }
 
-const POPUP_WIDTH = 280;
-const POPUP_HEIGHT = 320;
+const POPUP_WIDTH = 320;
+const POPUP_HEIGHT = 360;
 const GAP = 6;
 
 function toDate(value: string): Date | undefined {
