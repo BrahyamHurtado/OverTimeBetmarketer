@@ -14,7 +14,7 @@ export const authApi = {
       { auth: false },
     ),
 
-  login: (body: { correo: string; password: string }) =>
+  login: (body: { identificador: string; password: string }) =>
     apiClient.post<LoginResponse>('/api/auth/login', body, { auth: false }),
 
   perfil: (id: string) => apiClient.get<PerfilUsuario>(`/api/auth/perfil/${id}`),

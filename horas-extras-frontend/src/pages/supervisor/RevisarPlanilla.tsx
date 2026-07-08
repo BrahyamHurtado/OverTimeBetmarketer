@@ -12,15 +12,15 @@ import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { FirmaCanvas } from '@/components/FirmaCanvas';
 import { PlanillaTable } from '@/pages/planilla/PlanillaTable';
-import { PlanillaImprimible } from '@/components/PlanillaImprimible';
-import { calcularPreview } from '@/shared/calculo';
+import { printInforme, type InformePrintItem } from '@/shared/informePrint';
+import { autodetectarTipoDia } from '@/shared/festivos';
 import {
   COLOR_ESTADO,
   LABEL_ESTADO,
   nombreMes,
   formatFecha,
 } from '@/shared/format';
-import type { RegistroInput } from '@/shared/types';
+import type { PerfilUsuario, Planilla, RegistroInput } from '@/shared/types';
 
 type Decision = 'aprobar' | 'rechazar';
 
@@ -47,7 +47,14 @@ export default function RevisarPlanilla() {
     [planilla],
   );
 
-  const totales = useMemo(() => calcularPreview(registros).totales, [registros]);
+  const onImprimir = () => {
+    if (!planilla || !perfilQuery.data) return;
+    printInforme({
+      items: [construirItemImpresion(planilla, perfilQuery.data)],
+      titulo: `Planilla · ${perfilQuery.data.nombre}`,
+      subtitulo: `${nombreMes(planilla.mes)} ${planilla.anio}`,
+    });
+  };
 
   const onConfirm = () => {
     if (!planilla || !decision) return;
@@ -99,7 +106,13 @@ export default function RevisarPlanilla() {
             <Link to="/supervisor" className="btn-ghost">
               Volver
             </Link>
-            <Button variant="secondary" onClick={() => window.print()}>Imprimir</Button>
+            <Button
+              variant="secondary"
+              onClick={onImprimir}
+              disabled={!perfilQuery.data}
+            >
+              Imprimir
+            </Button>
             <Button
               variant="danger"
               disabled={yaRevisada}
@@ -143,22 +156,6 @@ export default function RevisarPlanilla() {
           <p className="mt-2 whitespace-pre-wrap text-sm text-ink-800">{planilla.observaciones}</p>
         </section>
       )}
-
-      {/* Vista imprimible */}
-      <div className="hidden print:block">
-        {perfilQuery.data && (
-          <PlanillaImprimible
-            perfil={perfilQuery.data}
-            mes={planilla.mes}
-            anio={planilla.anio}
-            registros={registros}
-            observaciones={planilla.observaciones ?? ''}
-            estado={planilla.estado}
-            firmaSupervisorUrl={planilla.firmaSupervisorUrl ?? null}
-            totales={totales}
-          />
-        )}
-      </div>
 
       {/* Modal de decisión */}
       <Modal
@@ -210,4 +207,53 @@ function InfoField({ label, value }: { label: string; value: string | null | und
       <p className="mt-1 text-sm text-ink-800">{value || '—'}</p>
     </div>
   );
+}
+
+function construirItemImpresion(planilla: Planilla, perfil: PerfilUsuario): InformePrintItem {
+  const registros = (planilla.registros ?? []).map((r) => ({
+    id: r.id,
+    fecha: r.fecha,
+    tipoDia: r.tipoDia ?? autodetectarTipoDia(r.fecha.slice(0, 10)),
+    horaInicio: r.horaInicio,
+    horaFin: r.horaFin,
+    extraDiurna: r.extraDiurna,
+    extraNocturna: r.extraNocturna,
+    domFestivaDiurna: r.domFestivaDiurna,
+    domFestivaNocturna: r.domFestivaNocturna,
+    totalHoras: r.totalHoras,
+  }));
+  const acc = registros.reduce(
+    (a, r) => ({
+      d: a.d + r.extraDiurna,
+      n: a.n + r.extraNocturna,
+      dd: a.dd + r.domFestivaDiurna,
+      dn: a.dn + r.domFestivaNocturna,
+      t: a.t + r.totalHoras,
+    }),
+    { d: 0, n: 0, dd: 0, dn: 0, t: 0 },
+  );
+  return {
+    planillaId: planilla.id,
+    empleadoId: planilla.empleadoId,
+    empleadoNombre: perfil.nombre,
+    empleadoCedula: perfil.cedula,
+    empleadoCargo: perfil.cargo,
+    empleadoDependencia: perfil.dependencia,
+    supervisorId: planilla.supervisorId,
+    supervisorNombre: planilla.supervisorNombre,
+    firmaSupervisorUrl: planilla.firmaSupervisorUrl,
+    firmaEmpleadoUrl: planilla.firmaEmpleadoUrl,
+    estado: planilla.estado,
+    revisadaAt: planilla.revisadaAt,
+    mes: planilla.mes,
+    anio: planilla.anio,
+    totalExtraDiurna: acc.d,
+    totalExtraNocturna: acc.n,
+    totalDomDiurna: acc.dd,
+    totalDomNocturna: acc.dn,
+    totalHoras: acc.t,
+    registros,
+    observaciones: planilla.observaciones,
+    correo: perfil.correo,
+  };
 }

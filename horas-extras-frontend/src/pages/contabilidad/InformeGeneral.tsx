@@ -3,12 +3,15 @@ import { Link } from '@modern-js/runtime/router';
 import {
   useInformeGeneral,
   useProcesarPlanillas,
+  useRechazarPlanillas,
 } from '@/__generated__/contabilidad.hooks';
 import { useToast } from '@/lib/toast';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import {
   COLOR_ESTADO,
@@ -21,6 +24,8 @@ import {
   nombreMes,
 } from '@/shared/format';
 import { Badge } from '@/components/ui/Badge';
+import { exportInformeExcel } from '@/shared/informeExport';
+import { printInforme } from '@/shared/informePrint';
 import type { InformeGeneralItem } from '@/shared/types';
 
 const ANIO_ACTUAL = new Date().getFullYear();
@@ -37,6 +42,9 @@ export default function InformeGeneral() {
 
   const { data, isLoading, isError, error } = useInformeGeneral(mes, anio);
   const procesar = useProcesarPlanillas();
+  const rechazar = useRechazarPlanillas();
+  const [modalRechazoAbierto, setModalRechazoAbierto] = useState(false);
+  const [motivoRechazo, setMotivoRechazo] = useState('');
 
   const items = useMemo(() => {
     if (!data) return [] as InformeGeneralItem[];
@@ -94,46 +102,92 @@ export default function InformeGeneral() {
       onError: (e) => toast.error(e.message),
     });
   };
-  const onExportCsv = () => {
-    const header = [
-      'planillaId', 'empleadoId', 'empleadoNombre', 'cedula', 'cargo', 'dependencia',
-      'periodoMes', 'periodoAnio', 'estado',
-      'supervisorNombre', 'firmaSupervisorUrl', 'revisadaAt',
-      'fecha', 'tipoDia', 'horaInicio', 'horaFin',
-      'extraDiurna', 'extraNocturna', 'domFestivaDiurna', 'domFestivaNocturna', 'totalHoras',
-    ];
-    const filas: (string | number)[][] = [header];
-    for (const it of items) {
-      if (it.registros.length === 0) {
-        filas.push([
-          it.planillaId, it.empleadoId, it.empleadoNombre ?? '', it.empleadoCedula ?? '',
-          it.empleadoCargo ?? '', it.empleadoDependencia ?? '',
-          it.mes, it.anio, it.estado,
-          it.supervisorNombre ?? '', it.firmaSupervisorUrl ?? '', it.revisadaAt ?? '',
-          '', '', '', '',
-          0, 0, 0, 0, 0,
-        ]);
-        continue;
-      }
-      for (const r of it.registros) {
-        filas.push([
-          it.planillaId, it.empleadoId, it.empleadoNombre ?? '', it.empleadoCedula ?? '',
-          it.empleadoCargo ?? '', it.empleadoDependencia ?? '',
-          it.mes, it.anio, it.estado,
-          it.supervisorNombre ?? '', it.firmaSupervisorUrl ?? '', it.revisadaAt ?? '',
-          formatFechaCorta(r.fecha), r.tipoDia, r.horaInicio, r.horaFin,
-          r.extraDiurna, r.extraNocturna, r.domFestivaDiurna, r.domFestivaNocturna, r.totalHoras,
-        ]);
-      }
+  const periodoTexto = mes ? `${nombreMes(mes)} ${anio}` : `Año ${anio}`;
+
+  const seleccionados = useMemo(
+    () => items.filter((it) => seleccion.has(it.planillaId)),
+    [items, seleccion],
+  );
+
+  const rechazablesSeleccionadas = useMemo(
+    () => seleccionados.filter((it) => it.estado === 'APROBADA'),
+    [seleccionados],
+  );
+
+  const abrirModalRechazo = () => {
+    if (rechazablesSeleccionadas.length === 0) {
+      toast.error('Selecciona al menos una planilla en estado APROBADA');
+      return;
     }
-    const csv = filas.map((r) => r.map(escapeCsv).join(',')).join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `informe-detallado-${anio}${mes ? `-${String(mes).padStart(2, '0')}` : ''}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setMotivoRechazo('');
+    setModalRechazoAbierto(true);
+  };
+
+  const cerrarModalRechazo = () => {
+    setModalRechazoAbierto(false);
+    setMotivoRechazo('');
+  };
+
+  const confirmarRechazo = () => {
+    const texto = motivoRechazo.trim();
+    if (texto.length < 3) {
+      toast.error('Escribe un motivo (mínimo 3 caracteres)');
+      return;
+    }
+    rechazar.mutate(
+      {
+        ids: rechazablesSeleccionadas.map((it) => it.planillaId),
+        motivoRechazo: texto,
+      },
+      {
+        onSuccess: (r) => {
+          toast.success(
+            `${r.rechazadas} planilla(s) devuelta(s) al empleado` +
+              (r.omitidas > 0 ? ` · ${r.omitidas} omitida(s)` : ''),
+          );
+          setSeleccion(new Set());
+          cerrarModalRechazo();
+        },
+        onError: (e) => toast.error(e.message),
+      },
+    );
+  };
+
+  const onExportExcel = () => {
+    if (items.length === 0) return;
+    const nombre = `informe-horas-${anio}${mes ? `-${String(mes).padStart(2, '0')}` : ''}.xlsx`;
+    exportInformeExcel(items, nombre);
+  };
+
+  const onImprimirTodos = () => {
+    if (items.length === 0) return;
+    printInforme({
+      items,
+      titulo: 'Informe de horas extras',
+      subtitulo: `${periodoTexto} · ${items.length} empleado(s)`,
+    });
+  };
+
+  const onImprimirSeleccionados = () => {
+    if (seleccionados.length === 0) {
+      toast.error('Selecciona al menos un empleado para imprimir');
+      return;
+    }
+    printInforme({
+      items: seleccionados,
+      titulo: seleccionados.length === 1
+        ? `Informe · ${seleccionados[0].empleadoNombre ?? 'Empleado'}`
+        : 'Informe de horas extras (selección)',
+      subtitulo: `${periodoTexto} · ${seleccionados.length} empleado(s) seleccionado(s)`,
+    });
+  };
+
+  const onImprimirIndividual = (it: InformeGeneralItem) => {
+    printInforme({
+      items: [it],
+      titulo: `Informe · ${it.empleadoNombre ?? 'Empleado'}`,
+      subtitulo: `${nombreMes(it.mes)} ${it.anio}`,
+    });
   };
 
   return (
@@ -143,11 +197,25 @@ export default function InformeGeneral() {
         description="Planillas aprobadas/procesadas en el periodo seleccionado."
         actions={
           <>
-            <Button variant="secondary" onClick={onExportCsv} disabled={items.length === 0}>
-              Exportar CSV detallado
+            <Button variant="secondary" onClick={onExportExcel} disabled={items.length === 0}>
+              Exportar Excel
             </Button>
-            <Button variant="secondary" onClick={() => window.print()} disabled={items.length === 0}>
-              Imprimir
+            <Button variant="secondary" onClick={onImprimirTodos} disabled={items.length === 0}>
+              Imprimir todos
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={onImprimirSeleccionados}
+              disabled={seleccion.size === 0}
+            >
+              Imprimir selección ({seleccion.size})
+            </Button>
+            <Button
+              variant="danger"
+              onClick={abrirModalRechazo}
+              disabled={rechazablesSeleccionadas.length === 0}
+            >
+              Rechazar ({rechazablesSeleccionadas.length})
             </Button>
             <Button onClick={onProcesar} loading={procesar.isPending} disabled={seleccion.size === 0}>
               Marcar como procesadas ({seleccion.size})
@@ -287,6 +355,14 @@ export default function InformeGeneral() {
                         <td className="px-3 py-2 text-right tabular-nums align-top">{formatHoras(it.totalDomNocturna)}</td>
                         <td className="px-3 py-2 text-right font-semibold tabular-nums align-top text-primary">{formatHoras(it.totalHoras)}</td>
                         <td className="px-3 py-2 text-right text-xs align-top">
+                          <button
+                            type="button"
+                            onClick={() => onImprimirIndividual(it)}
+                            className="text-primary hover:text-secondary"
+                          >
+                            Imprimir
+                          </button>
+                          <span className="mx-2 text-slate-400">·</span>
                           <Link className="text-primary hover:text-secondary" to={`/contabilidad/empleado/${it.empleadoId}`}>
                             Detalle
                           </Link>
@@ -324,6 +400,56 @@ export default function InformeGeneral() {
           </div>
         </div>
       )}
+
+      <Modal
+        open={modalRechazoAbierto}
+        onClose={cerrarModalRechazo}
+        title={`Devolver ${rechazablesSeleccionadas.length} planilla(s) al empleado`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={cerrarModalRechazo}>
+              Cancelar
+            </Button>
+            <Button variant="danger" onClick={confirmarRechazo} loading={rechazar.isPending}>
+              Rechazar y devolver
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-slate-700">
+          El empleado recibirá el motivo, corregirá los registros y volverá a enviarla.
+          <strong> El supervisor tendrá que aprobar y firmar de nuevo</strong> (se limpia su firma actual).
+        </p>
+        <Textarea
+          label="Motivo del rechazo *"
+          value={motivoRechazo}
+          onChange={(e) => setMotivoRechazo(e.target.value)}
+          placeholder="Indica qué debe corregir el empleado"
+          required
+          rows={4}
+        />
+        {rechazablesSeleccionadas.length > 0 && (
+          <details className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <summary className="cursor-pointer font-medium">
+              Ver planillas afectadas ({rechazablesSeleccionadas.length})
+            </summary>
+            <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
+              {rechazablesSeleccionadas.map((it) => (
+                <li key={it.planillaId} className="flex justify-between gap-4">
+                  <span>{it.empleadoNombre ?? it.empleadoId}</span>
+                  <span className="tabular-nums">{nombreMes(it.mes)} {it.anio}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {seleccionados.length !== rechazablesSeleccionadas.length && (
+          <p className="mt-3 text-xs text-amber-700">
+            Se ignorarán {seleccionados.length - rechazablesSeleccionadas.length} planilla(s)
+            que ya no están en estado APROBADA.
+          </p>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -391,8 +517,3 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-function escapeCsv(v: unknown): string {
-  const s = String(v ?? '');
-  if (/[",\n;]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}

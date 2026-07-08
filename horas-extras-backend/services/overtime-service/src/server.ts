@@ -176,6 +176,56 @@ app.post('/planillas/:id/revisar', async (req: any, reply) => {
   return p;
 });
 
+app.post('/planillas/revisar-lote', async (req: any, reply) => {
+  const u = user(req);
+  if (u.rol !== 'SUPERVISOR') return reply.code(403).send({ error: 'Solo supervisores' });
+  const { ids, aprobar, motivoRechazo, firmaSupervisorUrl } = z
+    .object({
+      ids: z.array(z.string().uuid()).min(1),
+      aprobar: z.boolean(),
+      motivoRechazo: z.string().optional(),
+      firmaSupervisorUrl: z.string().optional(),
+    })
+    .parse(req.body);
+
+  const planillas = await prisma.planilla.findMany({
+    where: { id: { in: ids }, supervisorId: u.sub, estado: 'ENVIADA' },
+    select: { id: true },
+  });
+  const idsPermitidos = planillas.map((p) => p.id);
+
+  if (idsPermitidos.length === 0) {
+    return reply.code(400).send({ error: 'No hay planillas válidas para revisar' });
+  }
+
+  const ahora = new Date();
+  await prisma.planilla.updateMany({
+    where: { id: { in: idsPermitidos } },
+    data: {
+      estado: aprobar ? 'APROBADA' : 'RECHAZADA',
+      revisadaAt: ahora,
+      revisadaPor: u.sub,
+      supervisorNombre: u.nombre ?? undefined,
+      motivoRechazo: aprobar ? null : motivoRechazo,
+      firmaSupervisorUrl,
+    },
+  });
+  await prisma.eventoPlanilla.createMany({
+    data: idsPermitidos.map((id) => ({
+      planillaId: id,
+      tipo: aprobar ? 'APROBADA' : 'RECHAZADA',
+      actorId: u.sub,
+      detalle: motivoRechazo ?? null,
+    })),
+  });
+
+  return {
+    procesadas: idsPermitidos.length,
+    omitidas: ids.length - idsPermitidos.length,
+    ids: idsPermitidos,
+  };
+});
+
 app.get('/planillas/:id', async (req: any, reply) => {
   const u = user(req);
   const p = await prisma.planilla.findUnique({

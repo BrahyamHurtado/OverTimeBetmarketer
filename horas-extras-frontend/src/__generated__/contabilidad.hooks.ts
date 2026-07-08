@@ -63,3 +63,18 @@ export function useProcesarPlanillas() {
     },
   });
 }
+
+export function useRechazarPlanillas() {
+  const qc = useQueryClient();
+  return useMutation<
+    { rechazadas: number; omitidas: number; ids: string[] },
+    ApiError,
+    { ids: string[]; motivoRechazo: string }
+  >({
+    mutationKey: [...contabilidadKeys.all, 'rechazar'],
+    mutationFn: contabilidadApi.rechazar,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: contabilidadKeys.all });
+    },
+  });
+}

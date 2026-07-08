@@ -24,7 +24,7 @@ export function useRegistroMutation() {
 }
 
 export function useLoginMutation() {
-  return useMutation<LoginResponse, ApiError, { correo: string; password: string }>({
+  return useMutation<LoginResponse, ApiError, { identificador: string; password: string }>({
     mutationKey: [...authKeys.all, 'login'],
     mutationFn: authApi.login,
   });

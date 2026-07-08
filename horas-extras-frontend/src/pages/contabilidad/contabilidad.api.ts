@@ -19,6 +19,12 @@ export const contabilidadApi = {
 
   procesar: (ids: string[]) =>
     apiClient.post<{ procesadas: number }>('/api/reportes/procesar', { ids }),
+
+  rechazar: (body: { ids: string[]; motivoRechazo: string }) =>
+    apiClient.post<{ rechazadas: number; omitidas: number; ids: string[] }>(
+      '/api/reportes/rechazar',
+      body,
+    ),
 };
 
 export type ContabilidadApi = typeof contabilidadApi;

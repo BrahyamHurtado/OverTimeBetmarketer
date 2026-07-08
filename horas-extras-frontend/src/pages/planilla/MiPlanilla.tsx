@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from '@modern-js/runtime/router';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePerfil } from '@/__generated__/auth.hooks';
@@ -10,7 +10,6 @@ import {
 } from '@/__generated__/planilla.hooks';
 import { useToast } from '@/lib/toast';
 import { PlanillaTable } from './PlanillaTable';
-import { PlanillaImprimible } from '@/components/PlanillaImprimible';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -18,6 +17,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { calcularPreview } from '@/shared/calculo';
+import { printInforme, type InformePrintItem } from '@/shared/informePrint';
+import { autodetectarTipoDia } from '@/shared/festivos';
 import {
   COLOR_ESTADO,
   LABEL_ESTADO,
@@ -26,6 +27,7 @@ import {
 } from '@/shared/format';
 import type {
   EstadoPlanilla,
+  PerfilUsuario,
   Planilla,
   RegistroInput,
 } from '@/shared/types';
@@ -106,8 +108,6 @@ export default function MiPlanilla() {
     );
   }
 
-  const totalesPreview = useMemo(() => calcularPreview(registros).totales, [registros]);
-
   const estado = planillaActual?.estado;
   const bloqueada = estado ? ESTADO_BLOQUEADO.includes(estado) : false;
 
@@ -150,7 +150,30 @@ export default function MiPlanilla() {
     });
   };
 
-  const onImprimir = () => window.print();
+  const onImprimir = () => {
+    if (!perfilQuery.data) {
+      toast.error('Espera a que cargue tu perfil');
+      return;
+    }
+    if (registros.length === 0) {
+      toast.error('Agrega al menos un registro para imprimir');
+      return;
+    }
+    printInforme({
+      items: [
+        armarItemImpresion({
+          perfil: perfilQuery.data,
+          mes,
+          anio,
+          registros,
+          observaciones,
+          planilla: planillaActual,
+        }),
+      ],
+      titulo: `Planilla · ${perfilQuery.data.nombre}`,
+      subtitulo: `${nombreMes(mes)} ${anio}`,
+    });
+  };
 
   if (perfilQuery.isLoading) {
     return (
@@ -255,21 +278,6 @@ export default function MiPlanilla() {
         />
       </section>
 
-      {/* Vista imprimible (solo visible al imprimir) */}
-      <div className="hidden print:block">
-        {perfilQuery.data && (
-          <PlanillaImprimible
-            perfil={perfilQuery.data}
-            mes={mes}
-            anio={anio}
-            registros={registros}
-            observaciones={observaciones}
-            estado={estado}
-            firmaSupervisorUrl={planillaActual?.firmaSupervisorUrl ?? null}
-            totales={totalesPreview}
-          />
-        )}
-      </div>
     </div>
   );
 }
@@ -281,4 +289,52 @@ function InfoField({ label, value }: { label: string; value: string | null | und
       <p className="mt-1 text-sm text-ink-800">{value || '—'}</p>
     </div>
   );
+}
+
+function armarItemImpresion(params: {
+  perfil: PerfilUsuario;
+  mes: number;
+  anio: number;
+  registros: RegistroInput[];
+  observaciones: string;
+  planilla: Planilla | null;
+}): InformePrintItem {
+  const { perfil, mes, anio, registros, observaciones, planilla } = params;
+  const calc = calcularPreview(registros);
+  const registrosDetalle = calc.registros.map((r, idx) => ({
+    id: `preview-${idx}`,
+    fecha: r.fecha,
+    tipoDia: r.tipoDia ?? (r.fecha ? autodetectarTipoDia(r.fecha) : 'HABIL'),
+    horaInicio: r.horaInicio,
+    horaFin: r.horaFin,
+    extraDiurna: r.extraDiurna,
+    extraNocturna: r.extraNocturna,
+    domFestivaDiurna: r.domFestivaDiurna,
+    domFestivaNocturna: r.domFestivaNocturna,
+    totalHoras: r.totalHoras,
+  }));
+  return {
+    planillaId: planilla?.id ?? '',
+    empleadoId: perfil.id,
+    empleadoNombre: perfil.nombre,
+    empleadoCedula: perfil.cedula,
+    empleadoCargo: perfil.cargo,
+    empleadoDependencia: perfil.dependencia,
+    supervisorId: planilla?.supervisorId ?? null,
+    supervisorNombre: planilla?.supervisorNombre ?? null,
+    firmaSupervisorUrl: planilla?.firmaSupervisorUrl ?? null,
+    firmaEmpleadoUrl: planilla?.firmaEmpleadoUrl ?? null,
+    estado: planilla?.estado ?? 'BORRADOR',
+    revisadaAt: planilla?.revisadaAt ?? null,
+    mes,
+    anio,
+    totalExtraDiurna: calc.totales.extraDiurna,
+    totalExtraNocturna: calc.totales.extraNocturna,
+    totalDomDiurna: calc.totales.domFestivaDiurna,
+    totalDomNocturna: calc.totales.domFestivaNocturna,
+    totalHoras: calc.totales.totalHoras,
+    registros: registrosDetalle,
+    observaciones,
+    correo: perfil.correo,
+  };
 }

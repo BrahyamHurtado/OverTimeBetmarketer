@@ -46,12 +46,25 @@ app.post('/auth/registro', async (req, reply) => {
 
 // --- Login ---
 app.post('/auth/login', async (req, reply) => {
-  const { correo, password } = z
-    .object({ correo: z.string().email(), password: z.string() })
+  const body = z
+    .object({
+      identificador: z.string().min(1).optional(),
+      correo: z.string().min(1).optional(),
+      password: z.string(),
+    })
     .parse(req.body);
 
-  const u = await prisma.usuario.findUnique({ where: { correo } });
-  if (!u || !u.activo || !(await bcrypt.compare(password, u.passwordHash))) {
+  const identificador = (body.identificador ?? body.correo ?? '').trim();
+  if (!identificador) {
+    return reply.code(400).send({ error: 'Ingresa correo o cédula' });
+  }
+
+  const esCorreo = identificador.includes('@');
+  const u = esCorreo
+    ? await prisma.usuario.findUnique({ where: { correo: identificador.toLowerCase() } })
+    : await prisma.usuario.findUnique({ where: { cedula: identificador } });
+
+  if (!u || !u.activo || !(await bcrypt.compare(body.password, u.passwordHash))) {
     return reply.code(401).send({ error: 'Credenciales inválidas' });
   }
   const token = app.jwt.sign(

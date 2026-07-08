@@ -96,5 +96,51 @@ app.post('/reportes/procesar', async (req: any) => {
   return { procesadas: ids.length };
 });
 
+app.post('/reportes/rechazar', async (req: any, reply) => {
+  const { ids, motivoRechazo } = z
+    .object({
+      ids: z.array(z.string().uuid()).min(1),
+      motivoRechazo: z.string().min(3),
+    })
+    .parse(req.body);
+
+  const actor = req.user.sub as string;
+
+  const candidatas = await prisma.planilla.findMany({
+    where: { id: { in: ids }, estado: 'APROBADA' },
+    select: { id: true },
+  });
+  const idsPermitidos = candidatas.map((p) => p.id);
+
+  if (idsPermitidos.length === 0) {
+    return reply.code(400).send({ error: 'Solo se pueden rechazar planillas APROBADAS' });
+  }
+
+  await prisma.planilla.updateMany({
+    where: { id: { in: idsPermitidos } },
+    data: {
+      estado: 'RECHAZADA',
+      motivoRechazo,
+      firmaSupervisorUrl: null,
+      revisadaAt: new Date(),
+      revisadaPor: actor,
+    },
+  });
+  await prisma.eventoPlanilla.createMany({
+    data: idsPermitidos.map((id) => ({
+      planillaId: id,
+      tipo: 'RECHAZADA',
+      actorId: actor,
+      detalle: `Rechazo contabilidad: ${motivoRechazo}`,
+    })),
+  });
+
+  return {
+    rechazadas: idsPermitidos.length,
+    omitidas: ids.length - idsPermitidos.length,
+    ids: idsPermitidos,
+  };
+});
+
 const port = Number(process.env.PORT ?? 4003);
 app.listen({ port, host: '0.0.0.0' }).then(() => app.log.info(`report-service en :${port}`));

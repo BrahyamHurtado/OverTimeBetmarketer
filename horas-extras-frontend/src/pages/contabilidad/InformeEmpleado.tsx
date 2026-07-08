@@ -5,11 +5,40 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { COLOR_ESTADO, LABEL_ESTADO, nombreMes, formatHoras } from '@/shared/format';
-import type { Planilla } from '@/shared/types';
+import { printInforme } from '@/shared/informePrint';
+import { exportInformeExcel } from '@/shared/informeExport';
+import type { InformeGeneralItem, Planilla } from '@/shared/types';
 
 export default function InformeEmpleado() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError, error } = useInformeEmpleado(id);
+
+  const items: InformeGeneralItem[] = (data?.planillas ?? []).map(planillaToItem);
+  const nombreEmpleado = items[0]?.empleadoNombre ?? 'Empleado';
+
+  const onImprimirTodo = () => {
+    if (items.length === 0) return;
+    printInforme({
+      items,
+      titulo: `Informe · ${nombreEmpleado}`,
+      subtitulo: `Historial completo · ${items.length} periodo(s)`,
+    });
+  };
+
+  const onImprimirPlanilla = (p: Planilla) => {
+    const it = planillaToItem(p);
+    printInforme({
+      items: [it],
+      titulo: `Informe · ${it.empleadoNombre ?? 'Empleado'}`,
+      subtitulo: `${nombreMes(it.mes)} ${it.anio}`,
+    });
+  };
+
+  const onExportExcel = () => {
+    if (items.length === 0) return;
+    const slug = (nombreEmpleado || 'empleado').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    exportInformeExcel(items, `informe-${slug}.xlsx`);
+  };
 
   return (
     <div className="space-y-6">
@@ -17,9 +46,25 @@ export default function InformeEmpleado() {
         title="Informe por empleado"
         description={id}
         actions={
-          <Link to="/contabilidad" className="btn-ghost">
-            Volver al informe general
-          </Link>
+          <>
+            <Button
+              variant="secondary"
+              onClick={onExportExcel}
+              disabled={items.length === 0}
+            >
+              Exportar Excel
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={onImprimirTodo}
+              disabled={items.length === 0}
+            >
+              Imprimir historial
+            </Button>
+            <Link to="/contabilidad" className="btn-ghost">
+              Volver al informe general
+            </Link>
+          </>
         }
       />
 
@@ -67,9 +112,14 @@ export default function InformeEmpleado() {
                       <td className="px-3 py-3 text-right tabular-nums">{formatHoras(t.domNoc)}</td>
                       <td className="px-3 py-3 text-right font-medium tabular-nums">{formatHoras(t.total)}</td>
                       <td className="px-3 py-3 text-right">
-                        <Link to={`/contabilidad/trazabilidad/${p.id}`}>
-                          <Button variant="secondary">Trazabilidad</Button>
-                        </Link>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="secondary" onClick={() => onImprimirPlanilla(p)}>
+                            Imprimir
+                          </Button>
+                          <Link to={`/contabilidad/trazabilidad/${p.id}`}>
+                            <Button variant="secondary">Trazabilidad</Button>
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -81,6 +131,47 @@ export default function InformeEmpleado() {
       )}
     </div>
   );
+}
+
+function planillaToItem(p: Planilla): InformeGeneralItem {
+  const rs = p.registros ?? [];
+  const totalExtraDiurna = rs.reduce((s, r) => s + r.extraDiurna, 0);
+  const totalExtraNocturna = rs.reduce((s, r) => s + r.extraNocturna, 0);
+  const totalDomDiurna = rs.reduce((s, r) => s + r.domFestivaDiurna, 0);
+  const totalDomNocturna = rs.reduce((s, r) => s + r.domFestivaNocturna, 0);
+  const totalHoras = rs.reduce((s, r) => s + r.totalHoras, 0);
+  return {
+    planillaId: p.id,
+    empleadoId: p.empleadoId,
+    empleadoNombre: p.empleadoNombre,
+    empleadoCedula: p.empleadoCedula,
+    empleadoCargo: p.empleadoCargo,
+    empleadoDependencia: p.empleadoDependencia,
+    supervisorId: p.supervisorId,
+    supervisorNombre: p.supervisorNombre,
+    firmaSupervisorUrl: p.firmaSupervisorUrl,
+    estado: p.estado,
+    revisadaAt: p.revisadaAt,
+    mes: p.mes,
+    anio: p.anio,
+    totalExtraDiurna,
+    totalExtraNocturna,
+    totalDomDiurna,
+    totalDomNocturna,
+    totalHoras,
+    registros: rs.map((r) => ({
+      id: r.id,
+      fecha: r.fecha,
+      tipoDia: r.tipoDia,
+      horaInicio: r.horaInicio,
+      horaFin: r.horaFin,
+      extraDiurna: r.extraDiurna,
+      extraNocturna: r.extraNocturna,
+      domFestivaDiurna: r.domFestivaDiurna,
+      domFestivaNocturna: r.domFestivaNocturna,
+      totalHoras: r.totalHoras,
+    })),
+  };
 }
 
 function totalDe(p: Planilla) {

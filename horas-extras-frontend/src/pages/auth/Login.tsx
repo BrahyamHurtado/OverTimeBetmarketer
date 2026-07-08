@@ -13,7 +13,7 @@ export default function Login() {
   const navigate = useNavigate();
   const toast = useToast();
   const mutation = useLoginMutation();
-  const [correo, setCorreo] = useState('');
+  const [identificador, setIdentificador] = useState('');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
@@ -22,12 +22,12 @@ export default function Login() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!correo || !password) {
-      toast.error('Ingresa correo y contraseña');
+    if (!identificador || !password) {
+      toast.error('Ingresa correo o cédula y contraseña');
       return;
     }
     mutation.mutate(
-      { correo, password },
+      { identificador: identificador.trim(), password },
       {
         onSuccess: (data) => {
           login(data.token, data.usuario);
@@ -53,13 +53,13 @@ export default function Login() {
 
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           <Input
-            label="Correo electrónico"
-            type="email"
-            autoComplete="email"
-            value={correo}
-            onChange={(e) => setCorreo(e.target.value)}
+            label="Correo o cédula"
+            type="text"
+            autoComplete="username"
+            value={identificador}
+            onChange={(e) => setIdentificador(e.target.value)}
             required
-            placeholder="nombre@empresa.com"
+            placeholder="nombre@empresa.com o cédula"
           />
           <Input
             label="Contraseña"

@@ -131,6 +131,19 @@ export interface RevisarPayload {
   firmaSupervisorUrl?: string;
 }
 
+export interface RevisarLotePayload {
+  ids: string[];
+  aprobar: boolean;
+  motivoRechazo?: string;
+  firmaSupervisorUrl?: string;
+}
+
+export interface RevisarLoteResponse {
+  procesadas: number;
+  omitidas: number;
+  ids: string[];
+}
+
 export interface InformeGeneralItem {
   planillaId: string;
   empleadoId: string;
