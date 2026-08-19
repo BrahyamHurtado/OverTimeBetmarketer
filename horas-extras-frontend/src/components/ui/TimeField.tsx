@@ -81,9 +81,6 @@ export function TimeField({
     }
   }, [open, value]);
 
-  // Al abrir el popup: detecta si es mobile y si es desktop calcula
-  // posición cerca del trigger. En mobile no calculamos coords porque
-  // el popup se renderiza centrado con CSS (translate(-50%, -50%)).
   useLayoutEffect(() => {
     if (!open) return;
     const mobile = window.innerWidth < MOBILE_BREAKPOINT;
@@ -106,11 +103,6 @@ export function TimeField({
     setCoords({ top, left });
   }, [open]);
 
-  // Cierre por click fuera / ESC / resize.
-  // OJO: quitamos el scroll listener con capture:true que cerraba
-  // el popup incluso cuando el usuario scrolleaba DENTRO del popup.
-  // En desktop, el resize ya reposiciona; en mobile el popup es modal
-  // centrado y no le afecta el scroll de fondo.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -160,16 +152,13 @@ export function TimeField({
     if (selecting === 'hour') setSelecting('minute');
   };
 
-  // Contenido del popup — se comparte entre versión mobile y desktop.
   const popupContent = (
     <>
       <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">
         {selecting === 'hour' ? 'Selecciona la hora' : 'Selecciona los minutos'}
       </p>
 
-      {/* Layout: en mobile columna, en desktop 2 columnas (dial | digital) */}
       <div className="flex flex-col items-center gap-4 md:flex-row md:items-center md:justify-center md:gap-6">
-        {/* Columna izquierda: el dial (siempre visible) */}
         <div className="flex flex-col items-center gap-3">
           <ClockDial
             value={dialValue}
@@ -177,7 +166,6 @@ export function TimeField({
             onChange={onDialChange}
             onCommit={onDialCommit}
           />
-          {/* Readout compacto solo en mobile */}
           <div className="flex items-center gap-2 md:hidden">
             <button
               type="button"
@@ -206,7 +194,6 @@ export function TimeField({
           </div>
         </div>
 
-        {/* Columna derecha: inputs digitales — solo en desktop */}
         <div className="hidden flex-col justify-center md:flex">
           <div className="flex items-start gap-2">
             <BigInput
@@ -233,7 +220,6 @@ export function TimeField({
         </div>
       </div>
 
-      {/* Footer: Cancelar / OK */}
       <div className="mt-4 flex justify-end gap-1">
         <button
           type="button"
@@ -275,12 +261,10 @@ export function TimeField({
         createPortal(
           isMobile ? (
             <>
-              {/* Backdrop oscuro que cierra al tocar afuera */}
               <div
                 className="fixed inset-0 z-[9998] bg-black/60"
                 onClick={() => setOpen(false)}
               />
-              {/* Popup centrado tipo modal */}
               <div
                 ref={popupRef}
                 style={{
