@@ -44,7 +44,6 @@ export function PlanillaImprimible({
       data-print="page"
       className="mx-auto max-w-[210mm] bg-white p-8 text-[12px] text-black"
     >
-      {/* Encabezado */}
       <header className="border-b border-black pb-3">
         <p className="text-center text-[10px] font-semibold uppercase tracking-wide">
           Planilla de horas extras diurnas, nocturnas, dominicales y festivos
@@ -54,7 +53,6 @@ export function PlanillaImprimible({
         </p>
       </header>
 
-      {/* Datos del servidor */}
       <section className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-[11px]">
         <Field label="Nombre del servidor" value={perfil.nombre} />
         <Field label="Cédula" value={perfil.cedula} />
@@ -65,7 +63,6 @@ export function PlanillaImprimible({
         {estado && <Field label="Estado" value={LABEL_ESTADO[estado]} />}
       </section>
 
-      {/* Tabla principal */}
       <table className="mt-4 w-full border-collapse border border-black text-[10px]">
         <thead>
           <tr className="bg-gray-100">
@@ -100,7 +97,6 @@ export function PlanillaImprimible({
               </tr>
             );
           })}
-          {/* Rellenamos hasta 12 filas mínimo para mantener el layout del formato */}
           {Array.from({ length: Math.max(0, 12 - calc.length) }).map((_, i) => (
             <tr key={`empty-${i}`}>
               <td className="border border-black px-1 py-2">&nbsp;</td>
@@ -132,7 +128,6 @@ export function PlanillaImprimible({
         Nota: las horas se registran en formato 24h (militar). Diurna 06:00–19:00, nocturna 19:00–06:00.
       </p>
 
-      {/* Observaciones */}
       <section className="mt-4">
         <p className="text-[11px] font-semibold">Observaciones</p>
         <div className="mt-1 min-h-[40px] border border-black px-2 py-1 text-[11px] whitespace-pre-wrap">
@@ -140,7 +135,6 @@ export function PlanillaImprimible({
         </div>
       </section>
 
-      {/* Firmas */}
       <section className="mt-8 grid grid-cols-2 gap-8">
         <div>
           <div className="h-[60px] border-b border-black" />

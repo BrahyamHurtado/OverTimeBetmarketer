@@ -136,7 +136,6 @@ export default function RevisarPlanilla() {
         }
       />
 
-      {/* Cabecera */}
       <section className="card p-4 print:hidden" data-print="hide">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <InfoField label="Nombre" value={perfilQuery.data?.nombre} />
@@ -157,7 +156,6 @@ export default function RevisarPlanilla() {
         </section>
       )}
 
-      {/* Modal de decisión */}
       <Modal
         open={decision !== null}
         onClose={() => setDecision(null)}

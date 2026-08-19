@@ -220,7 +220,6 @@ export default function MiPlanilla() {
         }
       />
 
-      {/* Banner de rechazo */}
       {estado === 'RECHAZADA' && planillaActual?.motivoRechazo && (
         <div
           className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 print:hidden"
@@ -231,7 +230,6 @@ export default function MiPlanilla() {
         </div>
       )}
 
-      {/* Cabecera autorrellenada */}
       <section className="card p-4 print:hidden" data-print="hide">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <InfoField label="Nombre" value={perfilQuery.data?.nombre} />
@@ -264,10 +262,8 @@ export default function MiPlanilla() {
         </div>
       </section>
 
-      {/* Tabla de registros */}
       <PlanillaTable registros={registros} onChange={setRegistros} readOnly={bloqueada} />
 
-      {/* Observaciones */}
       <section className="card p-4 print:hidden" data-print="hide">
         <Textarea
           label="Observaciones"
