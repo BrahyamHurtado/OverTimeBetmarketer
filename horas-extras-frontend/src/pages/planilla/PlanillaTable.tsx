@@ -11,6 +11,7 @@ import type { RegistroInput, TipoDia } from '@/shared/types';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { DateField } from '@/components/ui/DateField';
+import { TimeField } from '@/components/ui/TimeField';
 
 interface PlanillaTableProps {
   registros: RegistroInput[];
@@ -121,24 +122,24 @@ export function PlanillaTable({ registros, onChange, readOnly = false }: Planill
                     {readOnly ? (
                       <span className="text-sm tabular-nums">{r.horaInicio || '—'}</span>
                     ) : (
-                      <input
-                        type="time"
-                        className="input-base w-[9rem] py-1.5 text-base tabular-nums tracking-wide"
+                     <TimeField
                         value={r.horaInicio}
-                        onChange={(e) => update(idx, { horaInicio: e.target.value })}
-                      />
+                        onChange={(v) => update(idx,{horaInicio:v})}
+                        className="w-[9rem]"
+                        ariaLabel={'Hora de inicio de la fila ' + (idx + 1)}
+                        />
                     )}
                   </td>
                   <td className="px-3 py-2">
                     {readOnly ? (
                       <span className="text-sm tabular-nums">{r.horaFin || '—'}</span>
                     ) : (
-                      <input
-                        type="time"
-                        className="input-base w-[9rem] py-1.5 text-base tabular-nums tracking-wide"
+                      <TimeField
                         value={r.horaFin}
-                        onChange={(e) => update(idx, { horaFin: e.target.value })}
-                      />
+                        onChange={(v) => update(idx,{horaFin:v})}
+                        className="w-[9rem]"
+                        ariaLabel={'Hora de inicio de la fila ' + (idx + 1)}
+                        />
                     )}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatHoras(calc.extraDiurna)}</td>
