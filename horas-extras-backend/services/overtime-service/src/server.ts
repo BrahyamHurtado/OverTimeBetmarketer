@@ -123,11 +123,44 @@ app.post('/planillas/:id/enviar', async (req: any, reply) => {
   const u = user(req);
   const p = await prisma.planilla.findUnique({ where: { id: req.params.id } });
   if (!p || p.empleadoId !== u.sub) return reply.code(404).send({ error: 'No encontrada' });
-  const actualizada = await prisma.planilla.update({
-    where: { id: p.id },
-    data: { estado: 'ENVIADA', enviadaAt: new Date() },
+
+  // SUPERVISOR y CONTABILIDAD auto-aprueban sus propias planillas: no hay a quien revisarles.
+  const autoAprueba = u.rol === 'SUPERVISOR' || u.rol === 'CONTABILIDAD';
+  const ahora = new Date();
+
+  const actualizada = await prisma.$transaction(async (tx) => {
+    const nueva = await tx.planilla.update({
+      where: { id: p.id },
+      data: autoAprueba
+        ? {
+            estado: 'APROBADA',
+            enviadaAt: ahora,
+            revisadaAt: ahora,
+            revisadaPor: u.sub,
+            supervisorNombre: u.nombre ?? undefined,
+          }
+        : { estado: 'ENVIADA', enviadaAt: ahora },
+    });
+    if (autoAprueba) {
+      await tx.eventoPlanilla.create({
+        data: { planillaId: p.id, tipo: 'ENVIADA', actorId: u.sub },
+      });
+      await tx.eventoPlanilla.create({
+        data: {
+          planillaId: p.id,
+          tipo: 'APROBADA',
+          actorId: u.sub,
+          detalle: `Auto-aprobada (rol ${u.rol})`,
+        },
+      });
+    } else {
+      await tx.eventoPlanilla.create({
+        data: { planillaId: p.id, tipo: 'ENVIADA', actorId: u.sub },
+      });
+    }
+    return nueva;
   });
-  await prisma.eventoPlanilla.create({ data: { planillaId: p.id, tipo: 'ENVIADA', actorId: u.sub } });
+
   return actualizada;
 });
 

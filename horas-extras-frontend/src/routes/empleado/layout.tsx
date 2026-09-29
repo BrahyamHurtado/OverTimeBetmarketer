@@ -4,7 +4,7 @@ import { AppShell } from '@/components/AppShell';
 
 export default function EmpleadoLayout() {
   return (
-    <RoleGuard roles={['EMPLEADO']}>
+    <RoleGuard roles={['EMPLEADO', 'SUPERVISOR', 'CONTABILIDAD']}>
       <AppShell>
         <Outlet />
       </AppShell>

@@ -144,7 +144,9 @@ export default function MiPlanilla() {
     enviar.mutate(planillaActual.id, {
       onSuccess: (p) => {
         setPlanillaActual(p);
-        toast.success('Enviada al supervisor');
+        toast.success(
+          p.estado === 'APROBADA' ? 'Planilla aprobada automáticamente' : 'Enviada al supervisor',
+        );
       },
       onError: (e) => toast.error(e.message),
     });

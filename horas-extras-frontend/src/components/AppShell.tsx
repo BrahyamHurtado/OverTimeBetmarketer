@@ -13,9 +13,13 @@ const NAV_BY_ROL: Record<Rol, { to: string; label: string; exact?: boolean }[]> 
   SUPERVISOR: [
     { to: '/supervisor', label: 'Bandeja', exact: true },
     { to: '/supervisor/equipo', label: 'Mi equipo' },
+    { to: '/empleado', label: 'Mis horas', exact: true },
+    { to: '/empleado/planilla', label: 'Nueva planilla' },
   ],
   CONTABILIDAD: [
     { to: '/contabilidad', label: 'Informes', exact: true },
+    { to: '/empleado', label: 'Mis horas', exact: true },
+    { to: '/empleado/planilla', label: 'Nueva planilla' },
   ],
 };
 

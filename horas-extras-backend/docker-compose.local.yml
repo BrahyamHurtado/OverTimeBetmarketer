@@ -1,0 +1,121 @@
+# ================================================================
+# Stack de desarrollo LOCAL — aislado de produccion.
+#
+# Uso:
+#   docker compose -f docker-compose.local.yml -p he-local up -d --build
+#   docker compose -f docker-compose.local.yml -p he-local logs -f
+#   docker compose -f docker-compose.local.yml -p he-local down       (conserva datos)
+#   docker compose -f docker-compose.local.yml -p he-local down -v    (BORRA datos locales)
+#
+# El prefijo "-p he-local" evita chocar con los contenedores/volumenes
+# de "docker-compose.yml" (que se llaman "horas-extras-backend-*"),
+# asi puedes correr los dos simultaneamente sin pisarte.
+#
+# Puertos expuestos al host (todos distintos de produccion para
+# poder tener ambos activos si hace falta):
+#   db-auth       -> 5533   (prod: 5433)
+#   db-overtime   -> 5534   (prod: 5434)
+#   redis         -> 6380   (prod: 6379)
+#   rabbitmq amqp -> 5673   (prod: 5672)
+#   rabbitmq ui   -> 15673  (prod: 15672)
+#   gateway       -> 4100   (prod: 4000)
+#
+# Env: usa `.env.local` (ver `.env.local.example`). NO usa el `.env` de prod.
+# ================================================================
+
+services:
+  db-auth:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: he
+      POSTGRES_PASSWORD: he
+      POSTGRES_DB: auth
+    volumes: [auth_data:/var/lib/postgresql]
+    ports: ['5533:5432']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U he -d auth']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  db-overtime:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: he
+      POSTGRES_PASSWORD: he
+      POSTGRES_DB: overtime
+    volumes: [overtime_data:/var/lib/postgresql]
+    ports: ['5534:5432']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U he -d overtime']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ['6380:6379']
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports: ['5673:5672', '15673:15672']
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    env_file: .env.local
+    environment:
+      AUTH_DATABASE_URL: postgresql://he:he@db-auth:5432/auth
+      PORT: 4001
+    depends_on:
+      db-auth:
+        condition: service_healthy
+
+  overtime-service:
+    build:
+      context: .
+      dockerfile: services/overtime-service/Dockerfile
+    env_file: .env.local
+    environment:
+      OVERTIME_DATABASE_URL: postgresql://he:he@db-overtime:5432/overtime
+      PORT: 4002
+    depends_on:
+      db-overtime:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  report-service:
+    build:
+      context: .
+      dockerfile: services/report-service/Dockerfile
+    env_file: .env.local
+    environment:
+      OVERTIME_DATABASE_URL: postgresql://he:he@db-overtime:5432/overtime
+      PORT: 4003
+    depends_on:
+      db-overtime:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    env_file: .env.local
+    environment:
+      AUTH_URL: http://auth-service:4001
+      OVERTIME_URL: http://overtime-service:4002
+      REPORT_URL: http://report-service:4003
+      PORT: 4000
+    ports: ['4100:4000']
+    depends_on:
+      - auth-service
+      - overtime-service
+      - report-service
+
+volumes:
+  auth_data:
+  overtime_data:
